@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enterprise Sales Control Tower</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    :root {
+      --bg:#f0f4f8; --panel:#fff; --ink:#172033; --muted:#667085;
+      --line:#d8dee8; --accent:#087f8c; --accent-dark:#065f6a;
+      --green:#18875a; --red:#c43d3d; --amber:#b66b00; --blue:#2364aa;
+      --shadow:0 4px 24px rgba(25,35,52,.08); --r:10px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--ink);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:14px;line-height:1.5}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
+
+    /* ── Login ── */
+    .login-screen{min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(135deg,rgba(8,127,140,.14),rgba(217,79,48,.10)),var(--bg)}
+    .login-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:36px 32px}
+    .login-logo{font-size:22px;font-weight:800;color:var(--accent);margin-bottom:4px}
+    .login-sub{color:var(--muted);font-size:13px;margin-bottom:28px}
+    .login-err{background:#fde8e8;color:var(--red);border:1px solid #f5c6c6;border-radius:7px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none}
+    .login-err.show{display:block}
+
+    /* ── Shell ── */
+    .app-shell{display:grid;grid-template-columns:252px 1fr;min-height:100vh}
+    .sidebar{position:sticky;top:0;height:100vh;background:#16202f;color:#fff;display:flex;flex-direction:column;overflow-y:auto;z-index:30}
+    .sb-brand{padding:22px 18px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+    .sb-brand h1{font-size:15px;font-weight:800;line-height:1.3}
+    .sb-brand span{display:block;color:#8fa3bc;font-size:12px;margin-top:4px}
+    .sb-nav{padding:10px}
+    .nav-btn{width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:none;background:transparent;color:#c8d6e5;font-size:13px;font-weight:500;cursor:pointer;text-align:left;transition:background .15s,color .15s;margin-bottom:2px}
+    .nav-btn:hover{background:rgba(255,255,255,.08);color:#fff}
+    .nav-btn.active{background:var(--accent);color:#fff}
+    .nav-icon{width:22px;text-align:center;font-size:15px;flex-shrink:0}
+    .sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:29}
+
+    /* ── Main ── */
+    .main{min-width:0;padding:22px;display:flex;flex-direction:column;gap:16px}
+
+    /* ── Topbar ── */
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .topbar-left h2{font-size:22px;font-weight:800}
+    .topbar-left p{color:var(--muted);font-size:12px;margin-top:2px}
+    .topbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:12px;white-space:nowrap}
+    .dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+
+    /* ── Panel ── */
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+    .ph{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--line)}
+    .ph h3{font-size:14px;font-weight:700}
+    .pb{padding:16px}
+
+    /* ── Buttons ── */
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:0 14px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s;background:var(--accent);color:#fff}
+    .btn:hover{opacity:.88}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .btn.sec{background:#e8edf3;color:var(--ink)}
+    .btn.danger{background:var(--red);color:#fff}
+    .btn.sm{min-height:30px;padding:0 10px;font-size:12px}
+    .btn.outline{background:transparent;color:var(--accent);border:1.5px solid var(--accent)}
+
+    /* ── Form ── */
+    .fg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    .f{display:grid;gap:5px}
+    .f label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+    .f input,.f select,.f textarea{width:100%;min-height:38px;padding:8px 10px;border:1.5px solid var(--line);border-radius:7px;font:inherit;color:var(--ink);background:#fff;transition:border-color .15s}
+    .f input:focus,.f select:focus,.f textarea:focus{outline:none;border-color:var(--accent)}
+    .f textarea{min-height:72px;resize:vertical}
+    .f.s2{grid-column:span 2}
+    .f.s4{grid-column:1/-1}
+    .form-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .err-box{background:#fde8e8;color:var(--red);border:1px solid #f5c6c6;border-radius:7px;padding:9px 12px;font-size:13px;margin-bottom:12px;display:none}
+    .err-box.show{display:block}
+
+    /* ── Filters ── */
+    .filters{display:grid;grid-template-columns:repeat(6,minmax(110px,1fr));gap:10px;padding:13px}
+
+    /* ── KPI ── */
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    .kpi{padding:16px}
+    .kpi .kl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:7px}
+    .kpi .kv{font-size:24px;font-weight:800;line-height:1.1}
+    .kpi .kn{font-size:12px;color:var(--muted);margin-top:5px}
+    .kpi.accent{border-top:3px solid var(--accent)}
+
+    /* ── Content grid ── */
+    .cg{display:grid;grid-template-columns:1.4fr .9fr;gap:16px}
+    .chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .chart-card{padding:14px}
+    .chart-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:10px}
+
+    /* ── Table ── */
+    .tw{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;min-width:680px}
+    th,td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);font-size:13px}
+    th{background:#f7f9fc;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:#fafbfd}
+
+    /* ── Badges ── */
+    .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+    .b-ppu{background:#dff4f1;color:#08605f}
+    .b-npu{background:#fae6da;color:#8f3e19}
+    .b-won{background:#e5f6ef;color:var(--green)}
+    .b-lost{background:#fde8e8;color:var(--red)}
+    .b-open{background:#e7f0fb;color:var(--blue)}
+    .b-pending{background:#fff8e1;color:var(--amber)}
+    .b-done{background:#e5f6ef;color:var(--green)}
+    .b-planned{background:#fff8e1;color:var(--amber)}
+    .b-closed{background:#f0f4f8;color:var(--muted)}
+    .b-active{background:#e5f6ef;color:var(--green)}
+    .b-overdue{background:#fde8e8;color:var(--red)}
+
+    /* ── Progress ── */
+    .prog{height:7px;background:#edf1f6;border-radius:999px;overflow:hidden;margin-top:5px}
+    .prog-bar{height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--green))}
+
+    /* ── Insights / Alerts ── */
+    .insight-list,.alert-list{display:grid;gap:9px}
+    .insight,.alert-item{padding:11px 13px;border-radius:8px;border:1px solid var(--line);background:#fbfcfe}
+    .insight strong,.alert-item strong{display:block;font-size:13px;margin-bottom:3px}
+    .insight p,.alert-item p{color:var(--muted);font-size:12px}
+    .al-high{border-left:4px solid var(--red)}
+    .al-medium{border-left:4px solid var(--amber)}
+    .al-low{border-left:4px solid var(--blue)}
+
+    /* ── Report tabs ── */
+    .rtabs{display:flex;flex-wrap:wrap;gap:7px;padding:13px;border-bottom:1px solid var(--line)}
+    .rtab{min-height:30px;padding:0 12px;border-radius:999px;border:none;background:#e8edf3;color:var(--ink);font-size:12px;font-weight:700;cursor:pointer}
+    .rtab.active{background:var(--accent);color:#fff}
+
+    /* ── Empty / Loading ── */
+    .empty{padding:36px;text-align:center;color:var(--muted)}
+    .loading{display:flex;align-items:center;justify-content:center;min-height:180px;color:var(--muted);gap:10px}
+    .spinner{width:24px;height:24px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── Mobile ── */
+    .mob-btn{display:none}
+    @media(max-width:1200px){.filters,.kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.fg{grid-template-columns:repeat(2,minmax(0,1fr))}.cg,.chart-grid{grid-template-columns:1fr}}
+    @media(max-width:768px){
+      .app-shell{grid-template-columns:1fr}
+      .sidebar{position:fixed;inset:0 auto 0 0;width:256px;transform:translateX(-100%);transition:transform .2s ease}
+      .sidebar.open{transform:translateX(0)}
+      .sb-overlay{display:block}
+      .mob-btn{display:inline-flex}
+      .main{padding:14px}
+      .kpi-grid,.filters,.fg{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .topbar{flex-direction:column;align-items:flex-start}
+    }
+    @media(max-width:480px){.kpi-grid,.filters,.fg{grid-template-columns:1fr}}
+    @media print{.sidebar,.topbar-right,.filters,.form-actions,.mob-btn{display:none!important}.app-shell{display:block}.main{padding:0}.panel{box-shadow:none;break-inside:avoid}}
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+
+// ── Constants ────────────────────────────────────────────────
+const APP = 'Enterprise Sales Control Tower'
+const PPU_RATE = 5000, NPU_RATE = 30000
+const STAGES = ['Lead','Qualified','Demo Scheduled','Demo Done','Negotiation','Closed Won','Closed Lost']
+const STATUSES = ['Open','Won','Lost']
+const CLIENT_TYPES = ['PPU','NPU']
+const MTG_TYPES = ['Physical','Virtual','Call']
+const SOURCES = ['Referral','Inbound','Outbound','Partner','Event','Walk-in']
+const CITIES = ['Delhi','Gurgaon','Noida','Mumbai','Bengaluru','Other']
+const NAV = [
+  ['dashboard','Dashboard','⌂'],['leads','Lead Management','＋'],
+  ['meetings','Meeting Tracking','◎'],['activities','Daily Activity','◷'],
+  ['ppu','PPU Tracking','P'],['npu','NPU Tracking','N'],
+  ['targets','Target Management','◎'],['revenue','Revenue Tracking','₹'],
+  ['followups','Follow-ups','↗'],['reports','Reports','⇩'],['settings','Settings','⚙']
+]
+
+// ── Supabase ─────────────────────────────────────────────────
+const SUPA_URL = 'REPLACE_WITH_YOUR_SUPABASE_URL'
+const SUPA_KEY = 'REPLACE_WITH_YOUR_SUPABASE_ANON_KEY'
+let sb = null
+
+function initSupabase() {
+  try {
+    sb = window.supabase.createClient(SUPA_URL, SUPA_KEY)
+    return true
+  } catch(e) { return false }
+}
+
+// ── State ────────────────────────────────────────────────────
+const S = {
+  view: 'dashboard', user: null, profile: null,
+  managers: [], leads: [], targets: [], meetings: [],
+  activities: [], followups: [], revenue: [],
+  filters: { from: monthStart(), to: today(), manager: 'All', city: 'All', type: 'All', stage: 'All' },
+  editingLead: null, editingTarget: null, editingManager: null,
+  activeReport: 'summary', loading: false, sidebarOpen: false,
+  currentManagerId: ''
+}
+
+function today() { return new Date().toISOString().slice(0,10) }
+function monthStart() { return today().slice(0,7) + '-01' }
+function rupee(v) { return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(v||0) }
+function pct(v) { return Number.isFinite(v) ? Math.round(v)+'%' : '0%' }
+function mgrName(id) { return S.managers.find(m=>m.id===id)?.name || 'Unassigned' }
+function isAdmin() { return S.profile?.role === 'admin' }
+function daysSince(d) { return Math.floor((Date.now()-new Date(d).getTime())/86400000) }
+function qLabel(d) { const dt=new Date(d),q=Math.floor(dt.getMonth()/3)+1; return `Q${q} ${dt.getFullYear()}` }
+function calcDeal(outlets,type) { return outlets*(type==='PPU'?PPU_RATE:NPU_RATE) }
+
+function visibleLeads() {
+  let leads = [...S.leads]
+  if (!isAdmin()) leads = leads.filter(l=>l.sales_manager_id===S.currentManagerId)
+  const f = S.filters
+  return leads.filter(l=>{
+    if (f.from && l.lead_date < f.from) return false
+    if (f.to && l.lead_date > f.to) return false
+    if (f.manager!=='All' && l.sales_manager_id!==f.manager) return false
+    if (f.city!=='All' && l.city!==f.city) return false
+    if (f.type!=='All' && l.client_type!==f.type) return false
+    if (f.stage!=='All' && l.stage!==f.stage) return false
+    return true
+  })
+}
+
+function getMetrics(leads) {
+  const tScope = isAdmin() ? S.targets : S.targets.filter(t=>t.sales_manager_id===S.currentManagerId)
+  const won = leads.filter(l=>l.status==='Won')
+  const wonRev = won.reduce((s,l)=>s+(l.deal_value||0),0)
+  const ppuRev = won.filter(l=>l.client_type==='PPU').reduce((s,l)=>s+(l.deal_value||0),0)
+  const npuRev = won.filter(l=>l.client_type==='NPU').reduce((s,l)=>s+(l.deal_value||0),0)
+  const pipeline = leads.filter(l=>l.status==='Open').reduce((s,l)=>s+(l.deal_value||0),0)
+  const mTarget = tScope.filter(t=>t.period_type==='Monthly').reduce((s,t)=>s+t.target_value,0)
+  const qTarget = tScope.filter(t=>t.period_type==='Quarterly').reduce((s,t)=>s+t.target_value,0)
+  const total = mTarget+qTarget
+  return { totalLeads:leads.length, pipeline, wonRev, ppuRev, npuRev, mTarget, qTarget,
+    achievement: total?(wonRev/total)*100:0, remaining:Math.max(total-wonRev,0),
+    conversion: leads.length?(won.length/leads.length)*100:0 }
+}
+
+// ── Data fetching ─────────────────────────────────────────────
+async function fetchAll() {
+  if (!sb) return
+  S.loading = true; render()
+  const [mgr,leads,tgt,mtg,act,fu,rev] = await Promise.all([
+    sb.from('sales_managers').select('*').order('name'),
+    sb.from('leads').select('*').order('lead_date',{ascending:false}),
+    sb.from('targets').select('*'),
+    sb.from('meetings').select('*').order('meeting_date',{ascending:false}),
+    sb.from('activities').select('*').order('activity_date',{ascending:false}),
+    sb.from('followups').select('*').order('due_date'),
+    sb.from('revenue').select('*').order('revenue_date',{ascending:false}),
+  ])
+  S.managers   = mgr.data   || []
+  S.leads      = leads.data || []
+  S.targets    = tgt.data   || []
+  S.meetings   = mtg.data   || []
+  S.activities = act.data   || []
+  S.followups  = fu.data    || []
+  S.revenue    = rev.data   || []
+  if (!isAdmin() && !S.currentManagerId) {
+    const m = S.managers.find(m=>m.user_id===S.profile?.id)
+    if (m) S.currentManagerId = m.id
+  }
+  S.loading = false; render()
+}
+
+// ── Auth ──────────────────────────────────────────────────────
+async function checkAuth() {
+  if (!sb) { renderLogin('Supabase not configured. Set SUPA_URL and SUPA_KEY.'); return }
+  const { data:{ session } } = await sb.auth.getSession()
+  if (!session) { renderLogin(); return }
+  S.user = session.user
+  const { data:profile } = await sb.from('users').select('*').eq('auth_user_id',session.user.id).single()
+  if (!profile) { renderLogin('Profile not found. Contact admin.'); return }
+  S.profile = profile
+  await fetchAll()
+  // Realtime
+  sb.channel('crm').on('postgres_changes',{event:'*',schema:'public',table:'leads'},fetchAll).subscribe()
+}
+
+async function doLogin(email, password) {
+  const { error } = await sb.auth.signInWithPassword({ email, password })
+  if (error) return error.message
+  const { data:{ user } } = await sb.auth.getUser()
+  S.user = user
+  const { data:profile } = await sb.from('users').select('*').eq('auth_user_id',user.id).single()
+  if (!profile) return 'Profile not found. Ask admin to set up your account.'
+  S.profile = profile
+  await fetchAll()
+  return null
+}
+
+async function doLogout() {
+  await sb.auth.signOut()
+  S.user = null; S.profile = null
+  renderLogin()
+}
+
+// ── Render engine ─────────────────────────────────────────────
+function $(id) { return document.getElementById(id) }
+function app(html) { $('app').innerHTML = html }
+
+function renderLogin(errMsg='') {
+  app(`<div class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">${APP}</div>
+      <div class="login-sub">Sign in to your account to continue.</div>
+      <div class="login-err${errMsg?' show':''}" id="loginErr">${errMsg}</div>
+      <form id="loginForm" style="display:grid;gap:13px">
+        <div class="f"><label>Email address</label><input type="email" id="lemail" required autocomplete="email" placeholder="you@company.com"></div>
+        <div class="f"><label>Password</label><input type="password" id="lpass" required autocomplete="current-password" placeholder="••••••••"></div>
+        <button class="btn" type="submit" id="loginBtn" style="margin-top:4px">Sign in</button>
+      </form>
+    </div>
+  </div>`)
+  $('loginForm').addEventListener('submit', async e=>{
+    e.preventDefault()
+    const btn = $('loginBtn'); btn.disabled=true; btn.textContent='Signing in…'
+    const err = await doLogin($('lemail').value.trim(), $('lpass').value)
+    if (err) { $('loginErr').textContent=err; $('loginErr').classList.add('show'); btn.disabled=false; btn.textContent='Sign in' }
+  })
+}
+
+function render() {
+  if (!S.profile) return
+  const vl = visibleLeads()
+  const m = getMetrics(vl)
+  const navHtml = NAV.map(([id,label,icon])=>`<button class="nav-btn${S.view===id?' active':''}" data-nav="${id}"><span class="nav-icon">${icon}</span><span>${label}</span></button>`).join('')
+  const title = NAV.find(([id])=>id===S.view)?.[1]||'Dashboard'
+  const mgrSelect = isAdmin() ? `<select id="mgrSel" style="min-height:34px;border:1px solid var(--line);border-radius:7px;padding:0 9px;font-size:12px">
+    <option value="">All Managers</option>
+    ${S.managers.map(m=>`<option value="${m.id}"${S.currentManagerId===m.id?' selected':''}>${m.name}</option>`).join('')}
+  </select>` : ''
+
+  app(`<div class="app-shell">
+    ${S.sidebarOpen?`<div class="sb-overlay" id="sbOverlay"></div>`:''}
+    <aside class="sidebar${S.sidebarOpen?' open':''}" id="sidebar">
+      <div class="sb-brand"><h1>${APP}</h1><span>Realtime sales CRM</span></div>
+      <nav class="sb-nav">${navHtml}</nav>
+    </aside>
+    <main class="main">
+      <div class="topbar">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn sec sm mob-btn" id="mobBtn">☰</button>
+          <div class="topbar-left"><h2>${title}</h2><p>${isAdmin()?'Admin — all managers':'Manager — '+mgrName(S.currentManagerId)}</p></div>
+        </div>
+        <div class="topbar-right">
+          <span class="pill"><span class="dot"></span>Supabase live</span>
+          <span class="pill">${S.profile.email}</span>
+          ${mgrSelect}
+          <button class="btn sec sm" id="logoutBtn">Logout</button>
+        </div>
+      </div>
+      ${S.loading ? `<div class="loading"><div class="spinner"></div>Loading…</div>` : renderView(vl, m)}
+    </main>
+  </div>`)
+
+  // Bind nav
+  document.querySelectorAll('[data-nav]').forEach(b=>b.addEventListener('click',()=>{ S.view=b.dataset.nav; S.sidebarOpen=false; render() }))
+  $('mobBtn')?.addEventListener('click',()=>{ S.sidebarOpen=true; render() })
+  $('sbOverlay')?.addEventListener('click',()=>{ S.sidebarOpen=false; render() })
+  $('logoutBtn')?.addEventListener('click', doLogout)
+  $('mgrSel')?.addEventListener('change',e=>{ S.currentManagerId=e.target.value; render() })
+  document.querySelectorAll('[data-filter]').forEach(el=>{
+    el.value = S.filters[el.dataset.filter]
+    el.addEventListener('change',()=>{ S.filters[el.dataset.filter]=el.value; render() })
+  })
+  bindViewEvents()
+  if (S.view==='dashboard') renderCharts(vl)
+}
+
+function renderView(vl, m) {
+  switch(S.view) {
+    case 'dashboard':  return viewDashboard(vl, m)
+    case 'leads':      return viewLeads(vl)
+    case 'meetings':   return viewMeetings()
+    case 'activities': return viewActivities()
+    case 'ppu':        return viewTracking('PPU', vl)
+    case 'npu':        return viewTracking('NPU', vl)
+    case 'targets':    return viewTargets()
+    case 'revenue':    return viewRevenue()
+    case 'followups':  return viewFollowups()
+    case 'reports':    return viewReports(vl)
+    case 'settings':   return viewSettings()
+    default:           return viewDashboard(vl, m)
+  }
+}
+
+// ── Filters bar ───────────────────────────────────────────────
+function filtersBar() {
+  const mgrOpts = `<option value="All">All Managers</option>${S.managers.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}`
+  return `<div class="panel filters">
+    <div class="f"><label>From</label><input type="date" data-filter="from" value="${S.filters.from}"></div>
+    <div class="f"><label>To</label><input type="date" data-filter="to" value="${S.filters.to}"></div>
+    <div class="f"><label>Sales Person</label><select data-filter="manager"${!isAdmin()?' disabled':''}>${mgrOpts}</select></div>
+    <div class="f"><label>City</label><select data-filter="city"><option value="All">All Cities</option>${CITIES.map(c=>`<option>${c}</option>`).join('')}</select></div>
+    <div class="f"><label>Type</label><select data-filter="type"><option value="All">All Types</option>${CLIENT_TYPES.map(c=>`<option>${c}</option>`).join('')}</select></div>
+    <div class="f"><label>Stage</label><select data-filter="stage"><option value="All">All Stages</option>${STAGES.map(s=>`<option>${s}</option>`).join('')}</select></div>
+  </div>`
+}
+
+function kpi(label,value,note,accent='') {
+  return `<div class="panel kpi${accent?' accent':''}"><div class="kl">${label}</div><div class="kv">${value}</div>${note?`<div class="kn">${note}</div>`:''}</div>`
+}
+
+function badge(val) {
+  const map={PPU:'b-ppu',NPU:'b-npu',Won:'b-won',Lost:'b-lost',Open:'b-open',Pending:'b-pending',Done:'b-done',Planned:'b-planned',Closed:'b-closed',Active:'b-active',Overdue:'b-overdue'}
+  return `<span class="badge ${map[val]||'b-closed'}">${val}</span>`
+}
+
+// ── Dashboard ─────────────────────────────────────────────────
+function viewDashboard(vl, m) {
+  const insights = buildInsights(vl)
+  const alerts = buildAlerts()
+  return `${filtersBar()}
+  <div class="kpi-grid">
+    ${kpi('Total Leads',m.totalLeads,'Filtered pipeline')}
+    ${kpi('Total Pipeline ₹',rupee(m.pipeline),'Open deal value','accent')}
+    ${kpi('Closed Won ₹',rupee(m.wonRev),'Booked revenue','accent')}
+    ${kpi('Achievement %',pct(m.achievement),rupee(m.remaining)+' remaining','accent')}
+    ${kpi('PPU Revenue ₹',rupee(m.ppuRev),'₹5,000 per outlet')}
+    ${kpi('NPU Revenue ₹',rupee(m.npuRev),'₹30,000 per outlet')}
+    ${kpi('Monthly Target ₹',rupee(m.mTarget),'PPU monthly')}
+    ${kpi('Quarterly Target ₹',rupee(m.qTarget),'NPU quarterly')}
+    ${kpi('Conversion Rate',pct(m.conversion),'Won / total leads')}
+  </div>
+  <div class="cg">
+    <div class="panel">
+      <div class="ph"><h3>Performance Charts</h3><button class="btn sec sm" onclick="window.print()">Export PDF</button></div>
+      <div class="pb">
+        <div class="chart-grid">
+          <div class="panel chart-card"><div class="chart-title">Manager — Target vs Achievement</div><canvas id="cMgr" height="200"></canvas></div>
+          <div class="panel chart-card"><div class="chart-title">PPU vs NPU Revenue</div><canvas id="cType" height="200"></canvas></div>
+          <div class="panel chart-card"><div class="chart-title">Revenue Trend (Won)</div><canvas id="cTrend" height="200"></canvas></div>
+          <div class="panel chart-card"><div class="chart-title">Sales Funnel by Stage</div><canvas id="cFunnel" height="200"></canvas></div>
+          <div class="panel chart-card"><div class="chart-title">City-wise Prospects</div><canvas id="cCity" height="200"></canvas></div>
+          <div class="panel chart-card"><div class="chart-title">Lead Source Performance</div><canvas id="cSource" height="200"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;gap:14px">
+      <div class="panel">
+        <div class="ph"><h3>AI Insight Panel</h3></div>
+        <div class="pb insight-list">${insights.map(i=>`<div class="insight"><strong>${i.title}</strong><p>${i.body}</p></div>`).join('')}</div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h3>Automation Alerts</h3></div>
+        <div class="pb alert-list">${alerts.map(a=>`<div class="alert-item al-${a.level}"><strong>${a.title}</strong><p>${a.body}</p></div>`).join('')}</div>
+      </div>
+    </div>
+  </div>`
+}
+
+function buildInsights(vl) {
+  const byMgr = S.managers.map(mgr=>{
+    const ml=S.leads.filter(l=>l.sales_manager_id===mgr.id)
+    const rev=ml.filter(l=>l.status==='Won').reduce((s,l)=>s+(l.deal_value||0),0)
+    const tgt=S.targets.filter(t=>t.sales_manager_id===mgr.id).reduce((s,t)=>s+t.target_value,0)
+    return {name:mgr.name,rev,tgt,ach:tgt?rev/tgt:0}
+  })
+  const best=[...byMgr].sort((a,b)=>b.rev-a.rev)[0]
+  const behind=[...byMgr].filter(m=>m.tgt>0).sort((a,b)=>a.ach-b.ach)[0]
+  const stuck=S.leads.filter(l=>l.status==='Open'&&daysSince(l.updated_at)>=7).sort((a,b)=>(b.deal_value||0)-(a.deal_value||0))[0]
+  const ppuRev=S.leads.filter(l=>l.client_type==='PPU'&&l.status==='Won').reduce((s,l)=>s+(l.deal_value||0),0)
+  const npuRev=S.leads.filter(l=>l.client_type==='NPU'&&l.status==='Won').reduce((s,l)=>s+(l.deal_value||0),0)
+  return [
+    {title:'Best performer',body:best?`${best.name} leads with ${rupee(best.rev)} closed revenue.`:'No data yet.'},
+    {title:'Behind target',body:behind?`${behind.name} is at ${pct(behind.ach*100)} achievement — needs focus.`:'All on track.'},
+    {title:'Stuck deal',body:stuck?`${stuck.client_name} — no update for ${daysSince(stuck.updated_at)} days. Next: ${stuck.next_action||'—'}`:'No stuck deals.'},
+    {title:'Client type',body:`${npuRev>=ppuRev?'NPU':'PPU'} is performing better with ${rupee(Math.max(npuRev,ppuRev))} won revenue.`},
+    {title:'Recommendation',body:'Review high-value NPU follow-ups today, then push negotiation-stage PPU outlets toward closure before month end.'},
+  ]
+}
+
+function buildAlerts() {
+  const td=today()
+  const dueToday=S.followups.filter(f=>f.status==='Pending'&&f.due_date===td)
+  const stale=S.leads.filter(l=>l.status==='Open'&&daysSince(l.updated_at)>=7)
+  const highVal=S.leads.filter(l=>l.status==='Open'&&(l.deal_value||0)>=1000000)
+  const items=[
+    ...dueToday.map(f=>({level:'medium',title:'Follow-up due today',body:`${mgrName(f.sales_manager_id)} — ${S.leads.find(l=>l.id===f.lead_id)?.client_name||''}`})),
+    ...stale.map(l=>({level:'high',title:'No update for 7+ days',body:`${l.client_name} — ${rupee(l.deal_value)} pipeline`})),
+    ...highVal.map(l=>({level:'low',title:'High-value deal',body:`${l.client_name} worth ${rupee(l.deal_value)} needs review`})),
+  ]
+  return items.length?items:[{level:'low',title:'All clear',body:'No alerts for the selected period.'}]
+}
+
+function renderCharts(vl) {
+  const COLORS=['#087f8c','#d94f30','#18875a','#2364aa','#b66b00','#8b5cf6','#ec4899']
+  const opts={responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}
+
+  // Manager chart
+  const mLabels=S.managers.map(m=>m.name)
+  const mAch=S.managers.map(m=>vl.filter(l=>l.sales_manager_id===m.id&&l.status==='Won').reduce((s,l)=>s+(l.deal_value||0),0))
+  const mTgt=S.managers.map(m=>S.targets.filter(t=>t.sales_manager_id===m.id).reduce((s,t)=>s+t.target_value,0))
+  new Chart($('cMgr'),{type:'bar',data:{labels:mLabels,datasets:[{label:'Target',data:mTgt,backgroundColor:'#d8dee8'},{label:'Achieved',data:mAch,backgroundColor:'#087f8c'}]},options:opts})
+
+  // Type donut
+  const ppuR=vl.filter(l=>l.client_type==='PPU'&&l.status==='Won').reduce((s,l)=>s+(l.deal_value||0),0)
+  const npuR=vl.filter(l=>l.client_type==='NPU'&&l.status==='Won').reduce((s,l)=>s+(l.deal_value||0),0)
+  new Chart($('cType'),{type:'doughnut',data:{labels:['PPU','NPU'],datasets:[{data:[ppuR,npuR],backgroundColor:['#087f8c','#d94f30']}]},options:opts})
+
+  // Trend line
+  const months={}
+  vl.filter(l=>l.status==='Won').forEach(l=>{const mo=l.lead_date.slice(0,7);months[mo]=(months[mo]||0)+(l.deal_value||0)})
+  const mSorted=Object.entries(months).sort((a,b)=>a[0].localeCompare(b[0])).slice(-6)
+  new Chart($('cTrend'),{type:'line',data:{labels:mSorted.map(e=>e[0]),datasets:[{label:'Revenue',data:mSorted.map(e=>e[1]),borderColor:'#087f8c',backgroundColor:'rgba(8,127,140,.12)',fill:true,tension:.4}]},options:opts})
+
+  // Funnel bar
+  const fCounts=STAGES.map(s=>vl.filter(l=>l.stage===s).length)
+  new Chart($('cFunnel'),{type:'bar',data:{labels:STAGES,datasets:[{label:'Leads',data:fCounts,backgroundColor:COLORS}]},options:{...opts,indexAxis:'y'}})
+
+  // City pie
+  const cities={}; vl.forEach(l=>{cities[l.city]=(cities[l.city]||0)+1})
+  const cSorted=Object.entries(cities).sort((a,b)=>b[1]-a[1]).slice(0,6)
+  new Chart($('cCity'),{type:'pie',data:{labels:cSorted.map(e=>e[0]),datasets:[{data:cSorted.map(e=>e[1]),backgroundColor:COLORS}]},options:opts})
+
+  // Source bar
+  const src={}; vl.forEach(l=>{if(l.lead_source)src[l.lead_source]=(src[l.lead_source]||0)+1})
+  const sSorted=Object.entries(src).sort((a,b)=>b[1]-a[1])
+  new Chart($('cSource'),{type:'bar',data:{labels:sSorted.map(e=>e[0]),datasets:[{label:'Leads',data:sSorted.map(e=>e[1]),backgroundColor:COLORS}]},options:opts})
+}
+
+// ── Leads View ────────────────────────────────────────────────
+function viewLeads(vl) {
+  const mgrOpts = S.managers.map(m=>`<option value="${m.id}"${S.editingLead?.sales_manager_id===m.id?' selected':''}>${m.name}</option>`).join('')
+  const lead = S.editingLead || {}
+  const ct = lead.client_type||'PPU'
+  const outlets = lead.outlets||1
+  const td = today()
+  return `
+  <div class="panel">
+    <div class="ph"><h3>${lead.id?'Edit Lead: '+lead.client_name:'Add New Lead'}</h3><button class="btn sec sm" id="newLeadBtn">+ New Lead</button></div>
+    <div class="pb">
+      <div class="err-box" id="leadErr"></div>
+      <form id="leadForm" class="fg">
+        <input type="hidden" id="lId" value="${lead.id||''}">
+        <div class="f"><label>Date</label><input type="date" id="lDate" value="${lead.lead_date||td}" required></div>
+        <div class="f"><label>Sales Manager</label><select id="lMgr"${!isAdmin()?' disabled':''}>${mgrOpts}</select></div>
+        <div class="f s2"><label>Client / Restaurant Name</label><input type="text" id="lClient" value="${esc(lead.client_name||'')}" required placeholder="e.g. Tikka Junction"></div>
+        <div class="f s2"><label>Brand Name</label><input type="text" id="lBrand" value="${esc(lead.brand_name||'')}" placeholder="Brand if different"></div>
+        <div class="f"><label>City</label><select id="lCity">${CITIES.map(c=>`<option${lead.city===c?' selected':''}>${c}</option>`).join('')}</select></div>
+        <div class="f"><label>Contact Person</label><input type="text" id="lContact" value="${esc(lead.contact_person||'')}"></div>
+        <div class="f"><label>Contact Number</label><input type="tel" id="lPhone" value="${esc(lead.contact_number||'')}"></div>
+        <div class="f"><label>Client Type</label><select id="lType">${CLIENT_TYPES.map(c=>`<option${ct===c?' selected':''}>${c}</option>`).join('')}</select></div>
+        <div class="f"><label>Outlets</label><input type="number" id="lOutlets" value="${outlets}" min="1"></div>
+        <div class="f"><label>Deal Value ₹ (auto)</label><input type="number" id="lDeal" value="${calcDeal(outlets,ct)}" readonly style="background:#f7f9fc"></div>
+        <div class="f"><label>Lead Source</label><select id="lSource">${SOURCES.map(s=>`<option${lead.lead_source===s?' selected':''}>${s}</option>`).join('')}</select></div>
+        <div class="f"><label>Meeting Type</label><select id="lMtg">${MTG_TYPES.map(s=>`<option${lead.meeting_type===s?' selected':''}>${s}</option>`).join('')}</select></div>
+        <div class="f"><label>Stage</label><select id="lStage">${STAGES.map(s=>`<option${lead.stage===s?' selected':''}>${s}</option>`).join('')}</select></div>
+        <div class="f"><label>Status</label><select id="lStatus">${STATUSES.map(s=>`<option${lead.status===s?' selected':''}>${s}</option>`).join('')}</select></div>
+        <div class="f"><label>Follow-up Date</label><input type="date" id="lFollowup" value="${lead.follow_up_date||td}"></div>
+        <div class="f"><label>Expected Closure</label><input type="date" id="lClose" value="${lead.expected_closure_date||td}"></div>
+        <div class="f s2"><label>Remarks</label><textarea id="lRemarks">${esc(lead.remarks||'')}</textarea></div>
+        <div class="f s2"><label>Next Action</label><textarea id="lNext">${esc(lead.next_action||'')}</textarea></div>
+        <div class="f s4 form-actions">
+          <button class="btn" type="submit" id="leadSaveBtn">${lead.id?'Update Lead':'Save Lead'}</button>
+          <button class="btn sec" type="button" id="cancelLeadBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="ph"><h3>Lead Register (${vl.length})</h3><button class="btn sec sm" id="exportLeadsBtn">Export CSV</button></div>
+    <div class="tw">${leadsTable(vl)}</div>
+  </div>`
+}
+
+function leadsTable(leads) {
+  if (!leads.length) return '<div class="empty">No leads match the selected filters.</div>'
+  return `<table><thead><tr>${['Date','Manager','Client','City','Type','Outlets','Stage','Status','Deal Value','Follow-up',''].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>
+  ${leads.map(l=>`<tr>
+    <td>${l.lead_date}</td><td>${mgrName(l.sales_manager_id)}</td>
+    <td><strong>${esc(l.client_name)}</strong>${l.brand_name?`<br><span style="color:var(--muted);font-size:11px">${esc(l.brand_name)}</span>`:''}</td>
+    <td>${l.city}</td><td>${badge(l.client_type)}</td><td>${l.outlets}</td>
+    <td style="font-size:12px">${l.stage}</td><td>${badge(l.status)}</td>
+    <td>${rupee(l.deal_value)}</td><td>${l.follow_up_date||'—'}</td>
+    <td><button class="btn sec sm" data-edit-lead="${l.id}">Edit</button></td>
+  </tr>`).join('')}</tbody></table>`
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+
+// ── Meetings ──────────────────────────────────────────────────
+function viewMeetings() {
+  const rows = S.meetings.map(m=>{
+    const lead=S.leads.find(l=>l.id===m.lead_id)
+    return `<tr><td>${m.meeting_date}</td><td>${mgrName(m.sales_manager_id)}</td><td>${esc(lead?.client_name||'—')}</td><td>${m.meeting_type}</td><td>${badge(m.status)}</td><td style="font-size:12px;color:var(--muted)">${esc(m.notes||'—')}</td></tr>`
+  }).join('')
+  return `<div class="panel"><div class="ph"><h3>Meeting Tracking (${S.meetings.length})</h3></div>
+  <div class="tw">${rows?`<table><thead><tr>${['Date','Manager','Client','Type','Status','Notes'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No meetings recorded.</div>'}</div></div>`
+}
+
+// ── Activities ────────────────────────────────────────────────
+function viewActivities() {
+  const rows = S.activities.map(a=>{
+    const lead=S.leads.find(l=>l.id===a.lead_id)
+    return `<tr><td>${a.activity_date}</td><td>${mgrName(a.sales_manager_id)}</td><td>${esc(lead?.client_name||'—')}</td><td>${a.type}</td><td style="font-size:12px;color:var(--muted)">${esc(a.summary||'—')}</td></tr>`
+  }).join('')
+  return `<div class="panel"><div class="ph"><h3>Daily Activity Tracking (${S.activities.length})</h3></div>
+  <div class="tw">${rows?`<table><thead><tr>${['Date','Manager','Client','Activity','Summary'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No activities recorded.</div>'}</div></div>`
+}
+
+// ── PPU / NPU Tracking ────────────────────────────────────────
+function viewTracking(type, vl) {
+  const leads=vl.filter(l=>l.client_type===type)
+  const won=leads.filter(l=>l.status==='Won')
+  const pipeline=leads.filter(l=>l.status==='Open').reduce((s,l)=>s+(l.deal_value||0),0)
+  const revenue=won.reduce((s,l)=>s+(l.deal_value||0),0)
+  const rate=leads.length?(won.length/leads.length)*100:0
+  return `
+  <div class="kpi-grid">
+    ${kpi(type+' Leads',leads.length,'Filtered count')}
+    ${kpi(type+' Pipeline ₹',rupee(pipeline),'Open value')}
+    ${kpi(type+' Revenue ₹',rupee(revenue),type==='PPU'?'₹5,000 per outlet':'₹30,000 per outlet','accent')}
+    ${kpi(type+' Conversion',pct(rate),'Won / total')}
+  </div>
+  <div class="panel">
+    <div class="ph"><h3>${type} Lead Register (${leads.length})</h3><button class="btn sec sm" data-export="${type.toLowerCase()}">Export CSV</button></div>
+    <div class="tw">${leadsTable(leads)}</div>
+  </div>`
+}
+
+// ── Targets ───────────────────────────────────────────────────
+function viewTargets() {
+  const tgt = S.targets
+  const editForm = (S.editingTarget !== null && isAdmin()) ? targetForm(S.editingTarget) : ''
+  const rows = tgt.map(t=>{
+    const actual=S.leads.filter(l=>l.sales_manager_id===t.sales_manager_id&&l.client_type===t.client_type&&l.status==='Won').reduce((s,l)=>s+(l.deal_value||0),0)
+    const achPct=t.target_value?(actual/t.target_value)*100:0
+    const variance=actual-t.target_value
+    return `<tr>
+      <td>${mgrName(t.sales_manager_id)}</td>
+      <td style="font-size:12px">${t.period_type}<br>${t.period_start}</td>
+      <td>${badge(t.client_type)}</td><td>${t.outlet_target}</td><td>${t.brand_target}</td>
+      <td>${rupee(t.target_value)}</td>
+      <td>${rupee(actual)}<div class="prog"><div class="prog-bar" style="width:${Math.min(achPct,100)}%"></div></div></td>
+      <td>${pct(achPct)}</td>
+      <td style="color:${variance>=0?'var(--green)':'var(--red)'}">${rupee(variance)}</td>
+      ${isAdmin()?`<td><button class="btn sec sm" data-edit-target="${t.id}">Edit</button></td>`:''}
+    </tr>`
+  }).join('')
+  return `<div class="panel">
+    <div class="ph"><h3>Target Management</h3>${isAdmin()?'<button class="btn sm" id="addTargetBtn">+ Add Target</button>':''}</div>
+    <div class="pb">
+      ${editForm}
+      <div class="tw"><table><thead><tr>${['Manager','Period','Type','Outlet Target','Brand Target','Target ₹','Achieved ₹','Achievement %','Variance',isAdmin()?'Action':''].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows||'<tr><td colspan="10" class="empty">No targets set.</td></tr>'}</tbody></table></div>
+    </div>
+  </div>`
+}
+
+function targetForm(t) {
+  const td=today()
+  return `<form id="targetForm" class="fg" style="margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--line)">
+    <input type="hidden" id="tId" value="${t?.id||''}">
+    <div class="f"><label>Sales Manager</label><select id="tMgr">${S.managers.map(m=>`<option value="${m.id}"${t?.sales_manager_id===m.id?' selected':''}>${m.name}</option>`).join('')}</select></div>
+    <div class="f"><label>Period Type</label><select id="tPeriod"><option${t?.period_type==='Monthly'?' selected':''}>Monthly</option><option${t?.period_type==='Quarterly'?' selected':''}>Quarterly</option></select></div>
+    <div class="f"><label>Period Start</label><input type="date" id="tStart" value="${t?.period_start||td}"></div>
+    <div class="f"><label>Client Type</label><select id="tCType"><option${t?.client_type==='PPU'?' selected':''}>PPU</option><option${t?.client_type==='NPU'?' selected':''}>NPU</option></select></div>
+    <div class="f"><label>Outlet Target</label><input type="number" id="tOutlet" value="${t?.outlet_target??30}"></div>
+    <div class="f"><label>Brand Target</label><input type="number" id="tBrand" value="${t?.brand_target??0}"></div>
+    <div class="f"><label>Target Value ₹</label><input type="number" id="tValue" value="${t?.target_value??150000}"></div>
+    <div class="f form-actions" style="align-self:end">
+      <button class="btn sm" type="submit">Save</button>
+      <button class="btn sec sm" type="button" id="cancelTargetBtn">Cancel</button>
+    </div>
+  </form>`
+}
+
+// ── Revenue ───────────────────────────────────────────────────
+function viewRevenue() {
+  const total=S.revenue.reduce((s,r)=>s+r.amount,0)
+  const ppu=S.revenue.filter(r=>r.client_type==='PPU').reduce((s,r)=>s+r.amount,0)
+  const npu=S.revenue.filter(r=>r.client_type==='NPU').reduce((s,r)=>s+r.amount,0)
+  const rows=S.revenue.map(r=>{
+    const lead=S.leads.find(l=>l.id===r.lead_id)
+    return `<tr><td>${r.revenue_date}</td><td>${mgrName(r.sales_manager_id)}</td><td>${esc(lead?.client_name||'—')}</td><td>${badge(r.client_type)}</td><td><strong>${rupee(r.amount)}</strong></td></tr>`
+  }).join('')
+  return `
+  <div class="kpi-grid">
+    ${kpi('Total Revenue ₹',rupee(total),'All closed won','accent')}
+    ${kpi('PPU Revenue ₹',rupee(ppu),'₹5,000 per outlet')}
+    ${kpi('NPU Revenue ₹',rupee(npu),'₹30,000 per outlet')}
+    ${kpi('Revenue Entries',S.revenue.length,'Closed won records')}
+  </div>
+  <div class="panel"><div class="ph"><h3>Revenue Tracking (${S.revenue.length})</h3></div>
+  <div class="tw">${rows?`<table><thead><tr>${['Date','Manager','Client','Type','Amount'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No revenue recorded yet.</div>'}</div></div>`
+}
+
+// ── Follow-ups ────────────────────────────────────────────────
+function viewFollowups() {
+  const td=today()
+  const rows=S.followups.map(f=>{
+    const lead=S.leads.find(l=>l.id===f.lead_id)
+    const status=f.status==='Pending'&&f.due_date<td?'Overdue':f.status
+    return `<tr><td>${f.due_date}</td><td>${mgrName(f.sales_manager_id)}</td><td>${esc(lead?.client_name||'—')}</td><td>${badge(status)}</td><td style="font-size:12px;color:var(--muted)">${esc(f.next_action||'—')}</td></tr>`
+  }).join('')
+  const overdue=S.followups.filter(f=>f.status==='Pending'&&f.due_date<td).length
+  const pending=S.followups.filter(f=>f.status==='Pending'&&f.due_date>=td).length
+  return `<div class="panel">
+    <div class="ph"><h3>Follow-up Management</h3><div style="display:flex;gap:7px">${overdue?badge('Overdue')+` <span style="font-size:12px;color:var(--muted)">${overdue}</span>`:''}${pending?badge('Pending')+` <span style="font-size:12px;color:var(--muted)">${pending}</span>`:''}</div></div>
+    <div class="tw">${rows?`<table><thead><tr>${['Due Date','Manager','Client','Status','Next Action'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No follow-ups recorded.</div>'}</div></div>`
+}
+
+// ── Reports ───────────────────────────────────────────────────
+const REPORT_TABS=[
+  {id:'summary',label:'MTD Summary'},{id:'ppu',label:'PPU Report'},{id:'npu',label:'NPU Report'},
+  {id:'targets',label:'Target vs Actual'},{id:'quarterly',label:'Quarterly'},
+  {id:'won',label:'Closed Won'},{id:'lost',label:'Lost Deals'},{id:'pipeline',label:'Pipeline'},
+  {id:'followups',label:'Pending Follow-ups'},
+]
+
+function viewReports(vl) {
+  const {headers,rows}=reportData(S.activeReport,vl)
+  const tabsHtml=REPORT_TABS.map(t=>`<button class="rtab${S.activeReport===t.id?' active':''}" data-report="${t.id}">${t.label}</button>`).join('')
+  const tableHtml=rows.length?`<table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${['PPU','NPU','Won','Lost','Open','Pending','Overdue','Done','Planned'].includes(String(c))?badge(String(c)):esc(String(c??''))}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<div class="empty">No data for this report.</div>'
+  return `<div class="panel">
+    <div class="rtabs">${tabsHtml}</div>
+    <div class="ph"><h3>${REPORT_TABS.find(t=>t.id===S.activeReport)?.label}</h3><button class="btn sec sm" id="exportReportBtn">Export CSV</button></div>
+    <div class="tw">${tableHtml}</div>
+  </div>`
+}
+
+function reportData(id, vl) {
+  const leadRows=leads=>leads.map(l=>[l.lead_date,mgrName(l.sales_manager_id),l.client_name,l.city,l.client_type,l.outlets,l.stage,l.status,rupee(l.deal_value||0)])
+  const leadHdr=['Date','Manager','Client','City','Type','Outlets','Stage','Status','Deal Value']
+  if (id==='summary') {
+    const headers=['Manager','Leads','Won','PPU Rev','NPU Rev','Total Rev','Conversion']
+    const rows=S.managers.map(m=>{
+      const ml=vl.filter(l=>l.sales_manager_id===m.id)
+      const won=ml.filter(l=>l.status==='Won')
+      const ppu=won.filter(l=>l.client_type==='PPU').reduce((s,l)=>s+(l.deal_value||0),0)
+      const npu=won.filter(l=>l.client_type==='NPU').reduce((s,l)=>s+(l.deal_value||0),0)
+      return [m.name,ml.length,won.length,rupee(ppu),rupee(npu),rupee(ppu+npu),pct(ml.length?won.length/ml.length*100:0)]
+    })
+    return {headers,rows}
+  }
+  if (id==='ppu') return {headers:leadHdr,rows:leadRows(vl.filter(l=>l.client_type==='PPU'))}
+  if (id==='npu') return {headers:leadHdr,rows:leadRows(vl.filter(l=>l.client_type==='NPU'))}
+  if (id==='won') return {headers:leadHdr,rows:leadRows(vl.filter(l=>l.status==='Won'))}
+  if (id==='lost') return {headers:leadHdr,rows:leadRows(vl.filter(l=>l.status==='Lost'))}
+  if (id==='pipeline') return {headers:leadHdr,rows:leadRows(vl.filter(l=>l.status==='Open'))}
+  if (id==='targets') {
+    const headers=['Manager','Type','Period','Target','Actual','Achievement','Variance']
+    const rows=S.targets.map(t=>{
+      const actual=S.leads.filter(l=>l.sales_manager_id===t.sales_manager_id&&l.client_type===t.client_type&&l.status==='Won').reduce((s,l)=>s+(l.deal_value||0),0)
+      return [mgrName(t.sales_manager_id),t.client_type,`${t.period_type} ${t.period_start}`,rupee(t.target_value),rupee(actual),pct(t.target_value?actual/t.target_value*100:0),rupee(actual-t.target_value)]
+    })
+    return {headers,rows}
+  }
+  if (id==='quarterly') {
+    const map={}
+    S.targets.forEach(t=>{const q=qLabel(t.period_start);if(!map[q])map[q]={ppuT:0,ppuA:0,npuT:0,npuA:0};if(t.client_type==='PPU')map[q].ppuT+=t.target_value;else map[q].npuT+=t.target_value})
+    S.leads.filter(l=>l.status==='Won').forEach(l=>{const q=qLabel(l.expected_closure_date||l.lead_date);if(!map[q])map[q]={ppuT:0,ppuA:0,npuT:0,npuA:0};if(l.client_type==='PPU')map[q].ppuA+=(l.deal_value||0);else map[q].npuA+=(l.deal_value||0)})
+    const headers=['Quarter','PPU Target','PPU Actual','NPU Target','NPU Actual','Total Target','Total Actual','Achievement']
+    const rows=Object.entries(map).map(([q,v])=>{const tot=v.ppuT+v.npuT,act=v.ppuA+v.npuA;return[q,rupee(v.ppuT),rupee(v.ppuA),rupee(v.npuT),rupee(v.npuA),rupee(tot),rupee(act),pct(tot?act/tot*100:0)]})
+    return {headers,rows}
+  }
+  if (id==='followups') {
+    const td=today()
+    const headers=['Due Date','Manager','Client','Status','Next Action']
+    const rows=S.followups.filter(f=>f.status==='Pending').map(f=>{
+      const lead=S.leads.find(l=>l.id===f.lead_id)
+      return [f.due_date,mgrName(f.sales_manager_id),lead?.client_name||'—',f.due_date<td?'Overdue':'Pending',f.next_action||'—']
+    })
+    return {headers,rows}
+  }
+  return {headers:[],rows:[]}
+}
+
+// ── Settings ──────────────────────────────────────────────────
+function viewSettings() {
+  if (!isAdmin()) return `<div class="panel"><div class="ph"><h3>Settings</h3></div><div class="pb"><div class="insight"><strong>Your account</strong><p>${S.profile.full_name} — Sales Manager. Contact admin to change settings.</p></div></div></div>`
+  const mgrRows=S.managers.map(m=>`<tr>
+    <td><strong>${esc(m.name)}</strong></td><td>${esc(m.email)}</td>
+    <td>${badge(m.status==='Active'?'Active':'Pending')}</td>
+    <td>${m.active_from}</td><td>${m.target_from}</td>
+    <td><button class="btn sec sm" data-edit-mgr="${m.id}">Edit</button></td>
+  </tr>`).join('')
+  const editForm=S.editingManager!==null?managerForm(S.editingManager):''
+  return `
+  <div style="display:grid;gap:16px">
+    <div class="panel">
+      <div class="ph"><h3>Sales Managers</h3><button class="btn sm" id="addMgrBtn">+ Add Manager</button></div>
+      <div class="pb">
+        ${editForm}
+        <div class="tw"><table><thead><tr>${['Name','Email','Status','Active From','Target From','Action'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${mgrRows||'<tr><td colspan="6" class="empty">No managers yet.</td></tr>'}</tbody></table></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>Connection Info</h3></div>
+      <div class="pb">
+        <div class="insight"><strong>Supabase connected</strong><p>Data is stored in Supabase with row-level security. All users share the same live database with realtime updates.</p></div>
+        <div class="insight" style="margin-top:10px"><strong>Logged in as</strong><p>${S.profile.full_name} (${S.profile.email}) — ${S.profile.role==='admin'?'Admin':'Sales Manager'}</p></div>
+      </div>
+    </div>
+  </div>`
+}
+
+function managerForm(m) {
+  const td=today()
+  return `<form id="mgrForm" class="fg" style="margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--line)">
+    <div class="err-box" id="mgrErr"></div>
+    <input type="hidden" id="mId" value="${m?.id||''}">
+    <div class="f s2"><label>Full Name</label><input type="text" id="mName" value="${esc(m?.name||'')}" required></div>
+    <div class="f s2"><label>Email</label><input type="email" id="mEmail" value="${esc(m?.email||'')}" required></div>
+    <div class="f"><label>Status</label><select id="mStatus">${['Active','Joining June','Joining July','Inactive'].map(s=>`<option${m?.status===s?' selected':''}>${s}</option>`).join('')}</select></div>
+    <div class="f"><label>Active From</label><input type="date" id="mActive" value="${m?.active_from||td}"></div>
+    <div class="f"><label>Target Starts</label><input type="date" id="mTarget" value="${m?.target_from||td}"></div>
+    <div class="f form-actions" style="align-self:end">
+      <button class="btn sm" type="submit" id="mgrSaveBtn">Save</button>
+      <button class="btn sec sm" type="button" id="cancelMgrBtn">Cancel</button>
+    </div>
+  </form>`
+}
+
+// ── Event binding ─────────────────────────────────────────────
+function bindViewEvents() {
+  // Lead form
+  $('newLeadBtn')?.addEventListener('click',()=>{ S.editingLead=null; render() })
+  $('cancelLeadBtn')?.addEventListener('click',()=>{ S.editingLead=null; render() })
+  $('leadForm')?.addEventListener('submit', saveLead)
+  $('exportLeadsBtn')?.addEventListener('click',()=>exportCsv('leads'))
+  // Auto-calc deal value
+  const lType=$('lType'), lOutlets=$('lOutlets'), lDeal=$('lDeal')
+  if (lType&&lOutlets&&lDeal) {
+    const calc=()=>{ lDeal.value=calcDeal(Number(lOutlets.value)||0,lType.value) }
+    lType.addEventListener('change',calc); lOutlets.addEventListener('input',calc)
+  }
+  // Edit lead buttons
+  document.querySelectorAll('[data-edit-lead]').forEach(b=>b.addEventListener('click',()=>{
+    S.editingLead=S.leads.find(l=>l.id===b.dataset.editLead)||null; render()
+  }))
+  // Export tracking
+  document.querySelectorAll('[data-export]').forEach(b=>b.addEventListener('click',()=>exportCsv(b.dataset.export)))
+  // Report tabs
+  document.querySelectorAll('[data-report]').forEach(b=>b.addEventListener('click',()=>{ S.activeReport=b.dataset.report; render() }))
+  $('exportReportBtn')?.addEventListener('click',()=>{
+    const {headers,rows}=reportData(S.activeReport,visibleLeads())
+    downloadCsv(`report-${S.activeReport}.csv`,[headers,...rows])
+  })
+  // Targets
+  $('addTargetBtn')?.addEventListener('click',()=>{ S.editingTarget={}; render() })
+  $('cancelTargetBtn')?.addEventListener('click',()=>{ S.editingTarget=null; render() })
+  $('targetForm')?.addEventListener('submit', saveTarget)
+  document.querySelectorAll('[data-edit-target]').forEach(b=>b.addEventListener('click',()=>{
+    S.editingTarget=S.targets.find(t=>t.id===b.dataset.editTarget)||{}; render()
+  }))
+  // Settings / Managers
+  $('addMgrBtn')?.addEventListener('click',()=>{ S.editingManager={}; render() })
+  $('cancelMgrBtn')?.addEventListener('click',()=>{ S.editingManager=null; render() })
+  $('mgrForm')?.addEventListener('submit', saveManager)
+  document.querySelectorAll('[data-edit-mgr]').forEach(b=>b.addEventListener('click',()=>{
+    S.editingManager=S.managers.find(m=>m.id===b.dataset.editMgr)||{}; render()
+  }))
+}
+
+// ── Save functions ────────────────────────────────────────────
+async function saveLead(e) {
+  e.preventDefault()
+  const btn=$('leadSaveBtn'); btn.disabled=true; btn.textContent='Saving…'
+  const id=$('lId').value
+  const outlets=Number($('lOutlets').value)||1
+  const clientType=$('lType').value
+  const payload={
+    lead_date:$('lDate').value,
+    sales_manager_id:isAdmin()?$('lMgr').value:S.currentManagerId,
+    client_name:$('lClient').value.trim(),
+    brand_name:$('lBrand').value.trim()||null,
+    city:$('lCity').value,
+    contact_person:$('lContact').value.trim()||null,
+    contact_number:$('lPhone').value.trim()||null,
+    client_type:clientType,
+    outlets,
+    lead_source:$('lSource').value,
+    meeting_type:$('lMtg').value,
+    stage:$('lStage').value,
+    status:$('lStatus').value,
+    follow_up_date:$('lFollowup').value||null,
+    expected_closure_date:$('lClose').value||null,
+    remarks:$('lRemarks').value.trim()||null,
+    next_action:$('lNext').value.trim()||null,
+    updated_at:new Date().toISOString(),
+  }
+  if (!payload.client_name) { showErr('leadErr','Client name is required.'); btn.disabled=false; btn.textContent=id?'Update Lead':'Save Lead'; return }
+  const {error}=id ? await sb.from('leads').update(payload).eq('id',id) : await sb.from('leads').insert(payload)
+  if (error) { showErr('leadErr',error.message); btn.disabled=false; btn.textContent=id?'Update Lead':'Save Lead'; return }
+  S.editingLead=null; S.view='dashboard'; await fetchAll()
+}
+
+async function saveTarget(e) {
+  e.preventDefault()
+  const btn=e.currentTarget.querySelector('[type=submit]'); btn.disabled=true
+  const id=$('tId').value
+  const payload={
+    sales_manager_id:$('tMgr').value,
+    period_type:$('tPeriod').value,
+    period_start:$('tStart').value,
+    client_type:$('tCType').value,
+    outlet_target:Number($('tOutlet').value)||0,
+    brand_target:Number($('tBrand').value)||0,
+    target_value:Number($('tValue').value)||0,
+  }
+  const {error}=id ? await sb.from('targets').update(payload).eq('id',id) : await sb.from('targets').insert(payload)
+  if (error) { alert(error.message); btn.disabled=false; return }
+  S.editingTarget=null; await fetchAll()
+}
+
+async function saveManager(e) {
+  e.preventDefault()
+  const btn=$('mgrSaveBtn'); btn.disabled=true; btn.textContent='Saving…'
+  const id=$('mId').value
+  const payload={
+    name:$('mName').value.trim(),
+    email:$('mEmail').value.trim(),
+    status:$('mStatus').value,
+    active_from:$('mActive').value,
+    target_from:$('mTarget').value,
+  }
+  if (!payload.name||!payload.email) { showErr('mgrErr','Name and email are required.'); btn.disabled=false; btn.textContent='Save'; return }
+  const {error}=id ? await sb.from('sales_managers').update(payload).eq('id',id) : await sb.from('sales_managers').insert(payload)
+  if (error) { showErr('mgrErr',error.message); btn.disabled=false; btn.textContent='Save'; return }
+  S.editingManager=null; await fetchAll()
+}
+
+function showErr(id, msg) {
+  const el=$(id); if(!el) return
+  el.textContent=msg; el.classList.add('show')
+  setTimeout(()=>el.classList.remove('show'),5000)
+}
+
+// ── CSV Export ────────────────────────────────────────────────
+function exportCsv(kind) {
+  const vl=visibleLeads()
+  const leadRows=leads=>leads.map(l=>[l.lead_date,mgrName(l.sales_manager_id),l.client_name,l.brand_name||'',l.city,l.client_type,l.outlets,l.stage,l.status,l.deal_value||0,l.follow_up_date||'',l.expected_closure_date||''])
+  const leadHdr=['Date','Manager','Client','Brand','City','Type','Outlets','Stage','Status','Deal Value','Follow-up','Expected Close']
+  if (kind==='leads') downloadCsv('leads.csv',[leadHdr,...leadRows(vl)])
+  else if (kind==='ppu') downloadCsv('ppu-leads.csv',[leadHdr,...leadRows(vl.filter(l=>l.client_type==='PPU'))])
+  else if (kind==='npu') downloadCsv('npu-leads.csv',[leadHdr,...leadRows(vl.filter(l=>l.client_type==='NPU'))])
+}
+
+function downloadCsv(filename, rows) {
+  const csv=rows.map(r=>r.map(c=>`"${String(c??'').replace(/"/g,'""')}"`).join(',')).join('\n')
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=filename; a.click(); URL.revokeObjectURL(a.href)
+}
+
+// ── Boot ──────────────────────────────────────────────────────
+initSupabase()
+checkAuth()
+</script>
+</body>
+</html>
