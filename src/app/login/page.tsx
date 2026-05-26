@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/client'
 import { APP_NAME } from '@/lib/constants'
 
 export default function LoginPage() {
-  const supabase = createClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -15,7 +14,8 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    const supabase = createClient()
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (authError) {
       setError(authError.message)
@@ -23,15 +23,8 @@ export default function LoginPage() {
       return
     }
 
-    // Explicitly write the access token into a cookie so the middleware can read it
-    if (data.session) {
-      const maxAge = data.session.expires_in ?? 3600
-      const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-      document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`
-      document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax${secure}`
-    }
-
-    window.location.href = '/'
+    // Hard redirect — lets the browser send the new session cookies to the server
+    window.location.replace('/')
   }
 
   return (
