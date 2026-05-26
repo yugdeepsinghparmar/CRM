@@ -8,7 +8,6 @@ drop trigger if exists on_auth_user_created on auth.users;
 drop function if exists public.handle_new_user();
 drop function if exists public.is_admin();
 drop function if exists public.current_sales_manager_id();
-drop publication if exists supabase_realtime;
 
 drop table if exists public.followups cascade;
 drop table if exists public.revenue cascade;
@@ -236,10 +235,17 @@ create policy "admins manage followups"  on public.followups for all using (publ
 create policy "managers own followups"   on public.followups for all using (sales_manager_id = public.current_sales_manager_id()) with check (sales_manager_id = public.current_sales_manager_id());
 
 -- ── Realtime ─────────────────────────────────────────────────
-alter publication supabase_realtime add table public.leads;
-alter publication supabase_realtime add table public.meetings;
-alter publication supabase_realtime add table public.activities;
-alter publication supabase_realtime add table public.followups;
+-- Enable realtime via Supabase dashboard: Database > Replication > Tables
+-- Or run this only if supabase_realtime publication exists:
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    alter publication supabase_realtime add table public.leads;
+    alter publication supabase_realtime add table public.meetings;
+    alter publication supabase_realtime add table public.activities;
+    alter publication supabase_realtime add table public.followups;
+  end if;
+end $$;
 
 -- ── Seed: sample sales managers ─────────────────────────────
 insert into public.sales_managers (id, name, email, active_from, target_from, status) values
