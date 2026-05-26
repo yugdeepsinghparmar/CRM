@@ -26,8 +26,9 @@ export default function LoginPage() {
     // Explicitly write the access token into a cookie so the middleware can read it
     if (data.session) {
       const maxAge = data.session.expires_in ?? 3600
-      document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`
-      document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`
+      const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+      document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`
+      document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax${secure}`
     }
 
     window.location.href = '/'

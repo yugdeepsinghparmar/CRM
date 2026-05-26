@@ -52,15 +52,14 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isLoginPage = pathname === '/login'
 
-  if (!user && !isLoginPage) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
+  // Prevent redirect loops — if already going to login, let it through
+  if (isLoginPage) {
+    return supabaseResponse
   }
 
-  if (user && isLoginPage) {
+  if (!user) {
     const url = request.nextUrl.clone()
-    url.pathname = '/'
+    url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
