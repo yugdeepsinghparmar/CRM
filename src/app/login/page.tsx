@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { APP_NAME } from '@/lib/constants'
+import { createBrowserClient } from '@supabase/ssr'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -14,7 +14,11 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
-    const supabase = createClient()
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (authError) {
@@ -23,8 +27,9 @@ export default function LoginPage() {
       return
     }
 
-    // Hard redirect — lets the browser send the new session cookies to the server
-    window.location.replace('/')
+    // createBrowserClient automatically handles cookie storage.
+    // Full page navigation so the server middleware picks up the new session.
+    window.location.href = '/'
   }
 
   return (

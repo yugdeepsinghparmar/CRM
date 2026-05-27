@@ -18,7 +18,7 @@ export default async function Home() {
     .eq('auth_user_id', user.id)
     .maybeSingle()
 
-  // Auto-create profile if missing (trigger may not have fired)
+  // Auto-create profile if missing
   if (!profile) {
     const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
     const role = user.user_metadata?.role || 'sales_manager'

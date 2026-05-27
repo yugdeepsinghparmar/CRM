@@ -9,26 +9,38 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
+        get(name: string) {
+          return request.cookies.get(name)?.value
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+        set(name: string, value: string, options: any) {
+          request.cookies.set({ name, value, ...options })
           supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
+          supabaseResponse.cookies.set({ name, value, ...options })
+        },
+        remove(name: string, options: any) {
+          request.cookies.set({ name, value: '', ...options })
+          supabaseResponse = NextResponse.next({ request })
+          supabaseResponse.cookies.set({ name, value: '', ...options })
         },
       },
     }
   )
 
+  // IMPORTANT: do not run any code between createServerClient and auth.getUser()
   const { data: { user } } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
   const isLoginPage = pathname === '/login'
 
-  if (isLoginPage) return supabaseResponse
+  if (isLoginPage) {
+    // If already logged in, redirect to dashboard
+    if (user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
+    return supabaseResponse
+  }
 
   if (!user) {
     const url = request.nextUrl.clone()
